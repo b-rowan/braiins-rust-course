@@ -1,3 +1,6 @@
 fn main() {
-    println!("Hello, world!");
+    let message = String::from("Hello, world!");
+    let message_ref = &message;
+
+    println!("{}", *message_ref)
 }

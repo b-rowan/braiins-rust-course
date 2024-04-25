@@ -74,7 +74,6 @@ fn main() {
             println!("{}", user_input.chars().rev().collect::<String>());
         }
         "slugify" => {
-            // Doesn't reverse properly with accented characters either
             println!("{}", slugify(user_input));
         }
         &_ => {

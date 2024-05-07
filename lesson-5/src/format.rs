@@ -1,58 +1,61 @@
+use crate::error::InvalidFormatType;
+use is_vowel::IsRomanceVowel;
+use lazy_static::lazy_static;
+use slug;
 use std::collections::HashMap;
 use std::error::Error;
 
-const FORMAT_FUNCTIONS: HashMap<&str, fn(&mut String) -> Result<String,  Box<dyn Error>>> = HashMap::from([
-    ("lowercase", lowercase),
-    ("uppercase", uppercase),
-    ("consonants", consonants),
-    ("reverse", reverse),
-    ("no-spaces", no_spaces),
-    ("slugify", slugify),
-]);
+type FormattingResult = Result<String, Box<dyn Error>>;
+type FormattingFunction = fn(&mut String) -> FormattingResult;
 
-
-pub(crate) fn format_string(format: &str,  input: &mut String) -> Result<String,  Box<dyn std::error::Error>> {
-    let format_fn = FORMAT_FUNCTIONS.get(format).map(|x| *x);
-
-    return if format_fn.is_some() {
-        format_fn.unwrap()(input)
-    } else {
-        todo!()
-    }
+lazy_static! {
+    static ref FORMAT_FUNCTIONS: HashMap<&'static str, FormattingFunction> = HashMap::from([
+        ("lowercase", lowercase as FormattingFunction),
+        ("uppercase", uppercase as FormattingFunction),
+        ("consonants", consonants as FormattingFunction),
+        ("reverse", reverse as FormattingFunction),
+        ("no-spaces", no_spaces as FormattingFunction),
+        ("slugify", slugify as FormattingFunction),
+    ]);
 }
 
+pub(crate) fn format_string(format: &str, input: &mut String) -> FormattingResult {
+    let format_fn = FORMAT_FUNCTIONS.get(format).map(|x| *x);
 
-pub(crate) fn lowercase(input: &mut String)  -> Result<String,  Box<dyn Error>> {
+    format_fn.ok_or_else(|| InvalidFormatType(String::from(format)).into()).and_then(|func| func(input))
+}
+
+pub(crate) fn lowercase(input: &mut String) -> FormattingResult {
     Ok(input.to_lowercase())
 }
 
-pub(crate) fn uppercase(input: &mut String)  -> Result<String,  Box<dyn Error>> {
+pub(crate) fn uppercase(input: &mut String) -> FormattingResult {
     Ok(input.to_uppercase())
 }
 
-pub(crate) fn consonants(input: &mut String)  -> Result<String,  Box<dyn Error>> {
+pub(crate) fn consonants(input: &mut String) -> FormattingResult {
     let mut new_str = String::new();
 
     for char in input.chars() {
-        if !["a", "e", "i", "o", "u"].contains(&&char.to_string()[..]) {
+        if !char.is_romance_vowel() {
             new_str.push(char);
         }
     }
     Ok(new_str)
 }
 
-pub(crate) fn reverse(input: &mut String)  -> Result<String,  Box<dyn Error>> {
+pub(crate) fn reverse(input: &mut String) -> FormattingResult {
     Ok(input.chars().rev().collect::<String>())
 }
 
-pub(crate) fn no_spaces(input: &mut String)  -> Result<String,  Box<dyn Error>> {
+pub(crate) fn no_spaces(input: &mut String) -> FormattingResult {
     Ok(input.replace(" ", ""))
 }
 
-pub(crate) fn slugify(input: &mut String)  -> Result<String,  Box<dyn Error>> {
+pub(crate) fn slugify(input: &mut String) -> FormattingResult {
     Ok(slug::slugify(input))
 }
 
-pub(crate) fn table(input: &mut String)  -> Result<String,  Box<dyn Error>> {
+pub(crate) fn table(input: &mut String) -> FormattingResult {
     todo!()
 }

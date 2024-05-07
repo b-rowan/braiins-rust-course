@@ -2,6 +2,7 @@ use std::env;
 use std::process;
 use std::io;
 use slug::slugify;
+use is_vowel::IsRomanceVowel;
 
 const AVAILABLE_ARGS: [&str; 6] = [
     "lowercase",
@@ -28,7 +29,7 @@ impl Consonants for String {
         let mut new_str = String::new();
 
         for char in self.chars() {
-            if !["a", "e", "i", "o", "u"].contains(&&char.to_string()[..]) {
+            if !char.is_romance_vowel() {
                 new_str.push(char);
             }
         }

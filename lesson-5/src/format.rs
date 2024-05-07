@@ -1,9 +1,14 @@
-use crate::error::InvalidFormatType;
+use std::collections::HashMap;
+use std::error::Error;
+use std::io::Stdin;
+
+use csv::Reader;
 use is_vowel::IsRomanceVowel;
 use lazy_static::lazy_static;
 use slug;
-use std::collections::HashMap;
-use std::error::Error;
+
+use crate::error::InvalidFormatType;
+
 
 type FormattingResult = Result<String, Box<dyn Error>>;
 type FormattingFunction = fn(&mut String) -> FormattingResult;
@@ -22,7 +27,9 @@ lazy_static! {
 pub(crate) fn format_string(format: &str, input: &mut String) -> FormattingResult {
     let format_fn = FORMAT_FUNCTIONS.get(format).map(|x| *x);
 
-    format_fn.ok_or_else(|| InvalidFormatType(String::from(format)).into()).and_then(|func| func(input))
+    format_fn
+        .ok_or_else(|| InvalidFormatType(String::from(format)).into())
+        .and_then(|func| func(input))
 }
 
 pub(crate) fn lowercase(input: &mut String) -> FormattingResult {
@@ -56,6 +63,41 @@ pub(crate) fn slugify(input: &mut String) -> FormattingResult {
     Ok(slug::slugify(input))
 }
 
-pub(crate) fn table(input: &mut String) -> FormattingResult {
-    todo!()
+pub(crate) fn table(mut input: Reader<Stdin>) -> Result<String, Box<dyn Error>> {
+    let mut buffer = String::new();
+
+    let headers: Vec<_> = input.headers()?.into_iter().map(|field| field.to_string().replace(" ", "")).collect();
+
+    let mut all_rows = vec![headers];
+
+    for record in input.records() {
+        all_rows.push(record?.into_iter().map(|field| field.to_string().replace(" ", "")).collect::<Vec<_>>().to_owned())
+    }
+
+    let mut max_widths: Vec<usize> = vec![0; all_rows[0].len()];
+
+    for row in &all_rows {
+        for i in 0..max_widths.len() {
+            if row[i].len() > max_widths[i] {
+                max_widths[i] = row[i].len();
+            }
+        }
+    }
+
+
+    for row in all_rows {
+        buffer.push_str("|");
+        for (i, cell) in row.iter().enumerate() {
+            let width = max_widths[i];
+            buffer.push_str(&format!(" {:<width$} |", cell));
+        }
+        buffer.push_str("\n|");
+
+        // Separator line
+        for width in &max_widths {
+            buffer.push_str(&format!("-{:-<width$}-|", ""));
+        }
+        buffer.push_str("\n");
+    }
+    Ok(buffer)
 }

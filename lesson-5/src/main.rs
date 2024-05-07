@@ -1,17 +1,26 @@
 use std::env;
 use std::error::Error;
 use std::io;
+use std::io::{Read, Stdin};
 use std::process;
+
+use csv::Reader;
+
 use crate::error::NoFormatPassed;
 
 mod error;
 mod format;
 
-fn read_input() -> Result<String, Box<dyn Error>> {
+fn read_str_input() -> Result<String, Box<dyn Error>> {
     println!("Please enter the string to format:");
     let mut user_input = String::new();
-    io::stdin().read_line(&mut user_input)?;
+    io::stdin().read_to_string(&mut user_input)?;
     Ok(user_input)
+}
+
+fn read_csv_input() -> Reader<Stdin> {
+    println!("Please enter the csv to format:");
+    csv::Reader::from_reader(io::stdin())
 }
 
 fn validate_args(args: Vec<String>) -> Result<String, Box<dyn Error>> {
@@ -37,17 +46,22 @@ fn main() {
         String::new()
     });
 
-    let mut user_input = read_input().unwrap_or_else(|e| {
-        handle_err(e);
-        String::new()
-    });
+    let result = if format_type == "csv" {
+        let user_input = read_csv_input();
+        format::table(user_input).unwrap_or_else(|e| {
+            handle_err(e);
+            String::new()
+        })
+    } else {
+        let mut user_input = read_str_input().unwrap_or_else(|e| {
+            handle_err(e);
+            String::new()
+        });
+        format::format_string(&format_type.to_string(), &mut user_input).unwrap_or_else(|e| {
+            handle_err(e);
+            String::new()
+        })
+    };
 
-
-    let result = format::format_string(&format_type.to_string(), &mut user_input).unwrap_or_else(|e| {
-        handle_err(e);
-        String::new()
-    });
-
-
-    println!("Result: {result}")
+    println!("Result:\n{result}")
 }

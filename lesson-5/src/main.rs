@@ -1,7 +1,8 @@
 use std::env;
-use std::process;
 use std::io;
-use slug::slugify;
+use std::process;
+
+mod format;
 
 const AVAILABLE_ARGS: [&str; 6] = [
     "lowercase",
@@ -19,62 +20,59 @@ fn print_error() {
     }
 }
 
-trait Consonants {
-    fn consonants(&self) -> Self;
+fn read_input() -> String{
+    println!("Please enter the string to format:");
+    let mut user_input = String::new();
+    io::stdin().read_line(& mut user_input).expect("Invalid string.");
+
+    user_input
 }
 
-impl Consonants for String {
-    fn consonants(&self) -> Self {
-        let mut new_str = String::new();
-
-        for char in self.chars() {
-            if !["a", "e", "i", "o", "u"].contains(&&char.to_string()[..]) {
-                new_str.push(char);
-            }
-        }
-        new_str
-    }
-}
-
-fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() <= 1 {
+fn validate_args(args: Vec<String>) -> String {
+        if args.len() <= 1 {
         println!("No formatting argument passed.");
         print_error();
         process::exit(2);
     }
-    let format_type = &args[1][..];
+    let format_type = args[1].as_str();
 
-    if !AVAILABLE_ARGS.contains(&&format_type) {
+    if !AVAILABLE_ARGS.contains(&format_type) {
         println!("Invalid formatting argument: {}", args[1]);
         print_error();
         process::exit(2);
     }
 
-    println!("Please enter the string to format:");
-    let mut user_input = String::new();
-    io::stdin().read_line(& mut user_input).expect("Invalid string.");
+    format_type.to_owned()
+}
 
-    match format_type {
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    let format_type = validate_args(args);
+
+    let mut user_input = read_input();
+
+    match format_type.as_str() {
         "lowercase" => {
-            println!("{}", user_input.to_lowercase());
+            println!("{}", format::lowercase(&mut user_input));
         }
         "uppercase" => {
-            println!("{}", user_input.to_uppercase());
+            println!("{}", format::uppercase(&mut user_input));
         }
         "consonants" => {
             // Technically doesn't work with accented vowels, such as á
-            println!("{}", user_input.consonants());
+            println!("{}", format::consonants(&mut user_input));
         }
         "no-spaces" => {
-            println!("{}", user_input.replace(" ", ""));
+            println!("{}", format::no_spaces(&mut user_input));
         }
         "reverse" => {
             // Doesn't reverse properly with accented characters either
-            println!("{}", user_input.chars().rev().collect::<String>());
+            println!("{}", format::reverse(&mut user_input));
         }
         "slugify" => {
-            println!("{}", slugify(user_input));
+            println!("{}", format::slugify(&mut user_input));
         }
         &_ => {
             panic!("Should not be possible to reach.")

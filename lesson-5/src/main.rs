@@ -13,13 +13,6 @@ const AVAILABLE_ARGS: [&str; 6] = [
     "slugify",
 ];
 
-fn print_error() {
-    println!("Please pass one of:");
-    for arg in AVAILABLE_ARGS {
-        println!("{arg}");
-    }
-}
-
 fn read_input() -> String{
     println!("Please enter the string to format:");
     let mut user_input = String::new();
@@ -53,29 +46,6 @@ fn main() {
 
     let mut user_input = read_input();
 
-    match format_type.as_str() {
-        "lowercase" => {
-            println!("{}", format::lowercase(&mut user_input));
-        }
-        "uppercase" => {
-            println!("{}", format::uppercase(&mut user_input));
-        }
-        "consonants" => {
-            // Technically doesn't work with accented vowels, such as á
-            println!("{}", format::consonants(&mut user_input));
-        }
-        "no-spaces" => {
-            println!("{}", format::no_spaces(&mut user_input));
-        }
-        "reverse" => {
-            // Doesn't reverse properly with accented characters either
-            println!("{}", format::reverse(&mut user_input));
-        }
-        "slugify" => {
-            println!("{}", format::slugify(&mut user_input));
-        }
-        &_ => {
-            panic!("Should not be possible to reach.")
-        }
-    }
+    let result = format::format_string(&format_type.to_string(), &mut user_input);
+    dbg!(result);
 }

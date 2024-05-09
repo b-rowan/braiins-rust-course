@@ -20,7 +20,7 @@ fn read_str_input() -> Result<String, Box<dyn Error>> {
 
 fn read_csv_input() -> Reader<Stdin> {
     println!("Please enter the csv to format:");
-    csv::Reader::from_reader(io::stdin())
+    Reader::from_reader(io::stdin())
 }
 
 fn validate_args(args: Vec<String>) -> Result<String, Box<dyn Error>> {

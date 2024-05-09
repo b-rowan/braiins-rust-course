@@ -71,7 +71,7 @@ pub(crate) fn table(mut input: Reader<Stdin>) -> Result<String, Box<dyn Error>> 
     let mut all_rows = vec![headers];
 
     for record in input.records() {
-        all_rows.push(record?.into_iter().map(|field| field.to_string().replace(" ", "")).collect::<Vec<_>>().to_owned())
+        all_rows.push(record?.into_iter().map(|field| field.to_string()).collect::<Vec<_>>().to_owned())
     }
 
     let mut max_widths: Vec<usize> = vec![0; all_rows[0].len()];

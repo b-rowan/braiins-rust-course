@@ -1,3 +1,4 @@
+workspace = { members = ["lesson-7"] }
 [package]
 name = "lesson-5"
 version = "0.1.0"

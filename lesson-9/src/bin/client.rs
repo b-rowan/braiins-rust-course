@@ -1,4 +1,4 @@
-use lesson_9::{send_message, Message};
+use lesson_9::{receive_message, send_message, Message};
 use std::error::Error;
 use std::net::TcpStream;
 use std::process::exit;
@@ -14,7 +14,8 @@ fn main() {
         .set_nonblocking(true)
         .expect("Failed to make client non-blocking.");
 
-    let _ = thread::spawn(move || loop {
+    let mut receiver_client = client.try_clone().unwrap();
+    thread::spawn(move || loop {
         let input = read_input();
         match input {
             Ok(data) => {
@@ -22,7 +23,7 @@ fn main() {
                 match message {
                     Message::Stop => exit(0),
                     msg => {
-                        let _ = send_message(&mut client, &msg);
+                        let _ = send_message(&mut receiver_client, &msg);
                     }
                 }
             }
@@ -30,8 +31,10 @@ fn main() {
                 eprintln!("Error sending data to server: {e:?}")
             }
         }
-    })
-    .join();
+    });
+    loop {
+        receive_message(&mut client);
+    }
 }
 
 fn read_input() -> Result<String, Box<dyn Error>> {

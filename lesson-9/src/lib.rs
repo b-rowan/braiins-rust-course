@@ -29,7 +29,7 @@ impl Message {
                             name: file_path.file_name().unwrap().to_string_lossy().to_string(),
                             data: fs::read_to_string(&filename)
                                 .expect("Could not open the specified file."),
-                        }
+                        };
                     }
                     return Message::Text(data);
                 }
@@ -40,7 +40,7 @@ impl Message {
                         return Message::Photo {
                             data: fs::read_to_string(&filename)
                                 .expect("Could not open the specified file."),
-                        }
+                        };
                     };
                     return Message::Text(data);
                 }

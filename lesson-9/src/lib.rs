@@ -3,6 +3,7 @@ use std::fs;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::path::Path;
+use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
@@ -52,33 +53,37 @@ impl Message {
 }
 
 pub fn send_message(
-    mut stream: &mut TcpStream,
+    stream: &Mutex<TcpStream>,
     message: &Message,
 ) -> Result<String, Box<dyn Error>> {
     let msg_serialized = serde_cbor::to_vec(message)?;
     let msg_length = msg_serialized.len() as u32;
 
+    let mut s = stream.lock().unwrap();
+
     // prefix with len
-    let _ = &stream.write(&msg_length.to_le_bytes());
+    let _ = &s.write(&msg_length.to_le_bytes());
 
     // send message
-    let _ = &stream.write(&msg_serialized)?;
+    let _ = &s.write(&msg_serialized)?;
 
     Ok(String::from("Sent message."))
 }
 
-pub fn receive_message(mut stream: &mut TcpStream) -> Result<Message, Box<dyn Error>> {
+pub fn receive_message(stream: &Mutex<TcpStream>) -> Result<Message, std::io::Error> {
+    let mut s = stream.lock().unwrap();
+
     // get the message length first
     let mut msg_length_raw = [0u8; 4];
-    stream.read_exact(&mut msg_length_raw)?;
+    s.read_exact(&mut msg_length_raw)?;
 
     // read the message based off length
     let msg_length = u32::from_le_bytes(msg_length_raw);
-    let mut msg_raw = vec![0u8; usize::try_from(msg_length)?];
-    stream.read_exact(&mut msg_raw)?;
+    let mut msg_raw = vec![0u8; usize::try_from(msg_length).unwrap()];
+    s.read_exact(&mut msg_raw)?;
 
     // parse
-    let msg: Message = serde_cbor::from_slice(&msg_raw)?;
+    let msg: Message = serde_cbor::from_slice(&msg_raw).unwrap();
 
     Ok(msg)
 }

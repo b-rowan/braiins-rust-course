@@ -3,18 +3,20 @@ use std::error::Error;
 use std::net::TcpStream;
 use std::process::exit;
 use std::{io, thread};
+use std::io::ErrorKind;
+use std::sync::{Arc, Mutex};
 
 const ADDRESS: &str = "127.0.0.1";
 const PORT: i32 = 11111;
 
 fn main() {
     let mut client =
-        TcpStream::connect(format!("{ADDRESS}:{PORT}")).expect("Client failed to connect.");
+        Arc::new(Mutex::new(TcpStream::connect(format!("{ADDRESS}:{PORT}")).expect("Client failed to connect.")));
     client
-        .set_nonblocking(true)
+        .lock().unwrap().set_nonblocking(true)
         .expect("Failed to make client non-blocking.");
 
-    let mut receiver_client = client.try_clone().unwrap();
+    let receiver_client = client.clone();
     thread::spawn(move || loop {
         let input = read_input();
         match input {
@@ -23,7 +25,7 @@ fn main() {
                 match message {
                     Message::Stop => exit(0),
                     msg => {
-                        let _ = send_message(&mut receiver_client, &msg);
+                        let _ = send_message(&receiver_client, &msg);
                     }
                 }
             }
@@ -33,7 +35,17 @@ fn main() {
         }
     });
     loop {
-        receive_message(&mut client);
+        let result = receive_message(&client);
+
+        match result {
+            Ok(res) => {println!("{res:?}")}
+            Err(e) => {
+                if e.kind() != ErrorKind::WouldBlock {
+                    eprintln!("Client error: {e:?}");
+                    break
+                }
+            }
+        }
     }
 }
 

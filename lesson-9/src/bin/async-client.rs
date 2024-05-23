@@ -1,24 +1,26 @@
-use lesson_9::Message;
 use std::error::Error;
-use std::io;
-use std::sync::mpsc;
-use std::sync::mpsc::TryRecvError;
-use tokio::io::{AsyncReadExt, Interest};
+use async_std::io;
+use std::time::Duration;
+use tokio::sync::mpsc;
+
+use tokio::io::Interest;
 use tokio::net::TcpStream;
 
-const ADDRESS: &str = "0.0.0.0";
+use lesson_9::Message;
+
+const ADDRESS: &str = "127.0.0.1";
 const PORT: i32 = 11111;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let stream = TcpStream::connect(format!("{ADDRESS}:{PORT}")).await?;
-    let (tx, rx) = mpsc::channel::<Message>();
+    let (tx, mut rx) = mpsc::channel::<Message>(2048);
 
     tokio::spawn(async move {
         loop {
-            let input = read_input();
+            let input = read_input().await;
 
-            tx.send(Message::from(input.unwrap())).unwrap();
+            tx.send(Message::from(input.unwrap())).await.unwrap();
         }
     });
 
@@ -42,7 +44,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let mut msg_raw = vec![0u8; usize::try_from(msg_length).unwrap()];
             stream.try_read(&mut msg_raw).unwrap();
 
-
             let message: Message = serde_cbor::from_slice(&msg_raw).unwrap();
             println!("{message:?}")
         }
@@ -65,11 +66,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 break;
             }
         }
+        tokio::time::sleep(Duration::from_millis(1)).await;
     }
 }
 
-fn read_input() -> Result<String, Box<dyn Error>> {
+async fn read_input() -> Result<String, Box<dyn Error>> {
     let mut user_input = String::new();
-    io::stdin().read_line(&mut user_input)?;
+    io::stdin().read_line(&mut user_input).await?;
     Ok(user_input.trim().to_string())
 }

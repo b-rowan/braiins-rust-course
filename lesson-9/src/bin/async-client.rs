@@ -1,5 +1,6 @@
-use std::error::Error;
 use async_std::io;
+use std::error::Error;
+use std::process::exit;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
@@ -18,9 +19,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     tokio::spawn(async move {
         loop {
-            let input = read_input().await;
+            let input = read_input().await.unwrap();
+            let message = Message::from(input);
 
-            tx.send(Message::from(input.unwrap())).await.unwrap();
+            match message {
+                Message::Stop => exit(0),
+                m => {
+                    tx.send(m).await.unwrap();
+                }
+            }
         }
     });
 

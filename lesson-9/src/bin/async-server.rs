@@ -24,14 +24,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
-async fn handle_client(mut stream: TcpStream, clients: Arc<FairMutex<Vec<UnboundedSender<Message>>>>) {
+async fn handle_client(
+    mut stream: TcpStream,
+    clients: Arc<FairMutex<Vec<UnboundedSender<Message>>>>,
+) {
     let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
-    {clients.lock().push(tx);}
+    {
+        clients.lock().push(tx);
+    }
     loop {
         let ready = stream
             .ready(Interest::READABLE | Interest::WRITABLE)
-            .await.unwrap();
-
+            .await
+            .unwrap();
 
         if ready.is_readable() {
             let mut msg_length_raw = [0u8; 4];
@@ -49,7 +54,18 @@ async fn handle_client(mut stream: TcpStream, clients: Arc<FairMutex<Vec<Unbound
             let mut msg_raw = vec![0u8; usize::try_from(msg_length).unwrap()];
             stream.read_exact(&mut msg_raw).await.unwrap();
 
-            let message: Message = serde_cbor::from_slice(&msg_raw).unwrap();
+
+            let message_result = serde_cbor::from_slice(&msg_raw);
+
+            let message: Message = match message_result {
+                Ok(msg) => msg,
+                Err(_) => {
+                    eprintln!("Client {} closed the connection",  stream.peer_addr().unwrap());
+                    return;
+                }
+            };
+
+
             println!("Got client message: {message:?}");
             {
                 let client_handle = clients.lock();

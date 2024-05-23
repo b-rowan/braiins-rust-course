@@ -54,19 +54,35 @@ async fn handle_client(
             let mut msg_raw = vec![0u8; usize::try_from(msg_length).unwrap()];
             stream.read_exact(&mut msg_raw).await.unwrap();
 
-
             let message_result = serde_cbor::from_slice(&msg_raw);
 
             let message: Message = match message_result {
                 Ok(msg) => msg,
                 Err(_) => {
-                    eprintln!("Client {} closed the connection",  stream.peer_addr().unwrap());
+                    eprintln!(
+                        "Client {} closed the connection",
+                        stream.peer_addr().unwrap()
+                    );
                     return;
                 }
             };
 
+            match &message {
+                Message::File { name, .. } => {
+                    println!(
+                        "Receiving file from {}: {name}",
+                        stream.peer_addr().unwrap()
+                    );
+                }
+                Message::Photo { .. } => {
+                    println!("Receiving photo from {}", stream.peer_addr().unwrap());
+                }
+                Message::Text(text) => {
+                    println!("Got client message: {text}");
+                }
+                _ => {}
+            }
 
-            println!("Got client message: {message:?}");
             {
                 let client_handle = clients.lock();
                 for c in client_handle.iter() {

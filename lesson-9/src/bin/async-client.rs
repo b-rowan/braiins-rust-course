@@ -1,11 +1,14 @@
-use async_std::io;
+use std::env;
 use std::error::Error;
+use std::fs::create_dir_all;
 use std::process::exit;
 use std::time::Duration;
-use tokio::sync::mpsc;
 
+use async_std::io;
+use chrono::Utc;
 use tokio::io::Interest;
 use tokio::net::TcpStream;
+use tokio::sync::mpsc;
 
 use lesson_9::Message;
 
@@ -14,6 +17,11 @@ const PORT: i32 = 11111;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    let local_path = env::current_dir().unwrap();
+    let files_path = local_path.join("files");
+    let images_path = files_path.join("images");
+    create_dir_all(images_path.clone()).unwrap();
+
     let stream = TcpStream::connect(format!("{ADDRESS}:{PORT}")).await?;
     let (tx, mut rx) = mpsc::channel::<Message>(2048);
 
@@ -52,7 +60,26 @@ async fn main() -> Result<(), Box<dyn Error>> {
             stream.try_read(&mut msg_raw).unwrap();
 
             let message: Message = serde_cbor::from_slice(&msg_raw).unwrap();
-            println!("{message:?}")
+
+            match message {
+                Message::File { name, data } => {
+                    println!("Receiving file: {name}...");
+                    tokio::fs::write(files_path.clone().join(name), data)
+                        .await
+                        .unwrap();
+                }
+                Message::Photo { data } => {
+                    println!("Receiving photo...");
+                    let timestamp = Utc::now();
+                    tokio::fs::write(images_path.clone().join(format!("{}.png", timestamp.timestamp())), data)
+                        .await
+                        .unwrap();
+                }
+                Message::Text(msg) => {
+                    println!("{msg}")
+                }
+                Message::Stop => {}
+            }
         }
 
         let send_data = rx.try_recv();

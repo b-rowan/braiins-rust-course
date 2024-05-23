@@ -6,23 +6,31 @@ use std::time::Duration;
 
 use async_std::io;
 use chrono::Utc;
+use clap::Parser;
 use tokio::io::Interest;
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 
 use lesson_9::Message;
 
-const ADDRESS: &str = "127.0.0.1";
-const PORT: i32 = 11111;
+#[derive(Parser, Debug)]
+struct Args {
+    #[arg(short, long, default_value_t = String::from("127.0.0.1"))]
+    address: String,
+    #[arg(short, long, default_value_t = 11111)]
+    port: u16,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    let args = Args::parse();
+
     let local_path = env::current_dir().unwrap();
     let files_path = local_path.join("files");
     let images_path = files_path.join("images");
     create_dir_all(images_path.clone()).unwrap();
 
-    let stream = TcpStream::connect(format!("{ADDRESS}:{PORT}")).await?;
+    let stream = TcpStream::connect(format!("{}:{}", args.address, args.port)).await?;
     let (tx, mut rx) = mpsc::channel::<Message>(2048);
 
     tokio::spawn(async move {
@@ -59,7 +67,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let mut msg_raw = vec![0u8; usize::try_from(msg_length).unwrap()];
             stream.try_read(&mut msg_raw).unwrap();
 
-            let message: Message = serde_cbor::from_slice(&msg_raw).unwrap();
+            let message_result = serde_cbor::from_slice(&msg_raw);
+
+            if message_result.is_err() {
+                eprintln!("Server disconnected.  Closing.");
+                exit(0);
+            }
+
+            let message = message_result.unwrap();
 
             match message {
                 Message::File { name, data } => {

@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::{Cursor, Read};
+use std::io::{Cursor};
 use std::path::Path;
 use image::{DynamicImage, ImageFormat};
 use image::io::Reader as ImageReader;

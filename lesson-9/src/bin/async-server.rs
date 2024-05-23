@@ -3,6 +3,7 @@ use std::io;
 use std::sync::Arc;
 use std::time::Duration;
 
+use clap::Parser;
 use parking_lot::FairMutex;
 use tokio::io::{AsyncReadExt, Interest};
 use tokio::net::{TcpListener, TcpStream};
@@ -10,12 +11,19 @@ use tokio::sync::mpsc::{self, UnboundedSender};
 
 use lesson_9::Message;
 
-const ADDRESS: &str = "0.0.0.0";
-const PORT: i32 = 11111;
+#[derive(Parser, Debug)]
+struct Args {
+    #[arg(short, long, default_value_t = String::from("0.0.0.0"))]
+    address: String,
+    #[arg(short, long, default_value_t = 11111)]
+    port: u16,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let server = TcpListener::bind(format!("{ADDRESS}:{PORT}")).await?;
+    let args = Args::parse();
+
+    let server = TcpListener::bind(format!("{}:{}", args.address, args.port)).await?;
     let clients = Arc::new(FairMutex::new(Vec::new()));
     loop {
         let (socket, addr) = server.accept().await?;

@@ -44,7 +44,7 @@ async fn handle_client(
         let ready = stream
             .ready(Interest::READABLE | Interest::WRITABLE)
             .await
-            .unwrap();
+            .expect("Failed to initialized read/write checks...");
 
         if ready.is_readable() {
             let mut msg_length_raw = [0u8; 4];
@@ -59,8 +59,8 @@ async fn handle_client(
             }
 
             let msg_length = u32::from_le_bytes(msg_length_raw);
-            let mut msg_raw = vec![0u8; usize::try_from(msg_length).unwrap()];
-            stream.read_exact(&mut msg_raw).await.unwrap();
+            let mut msg_raw = vec![0u8; usize::try_from(msg_length).expect("Failed to parse message length from client...")];
+            stream.read_exact(&mut msg_raw).await.expect("Failed to read message from client...");
 
             let message_result = serde_cbor::from_slice(&msg_raw);
 
@@ -94,7 +94,7 @@ async fn handle_client(
             {
                 let client_handle = clients.lock();
                 for c in client_handle.iter() {
-                    c.send(message.clone()).unwrap();
+                    c.send(message.clone()).expect("Failed to broadcast message from client...");
                 }
             }
         }
@@ -102,7 +102,7 @@ async fn handle_client(
         let send_data = rx.try_recv();
         if let Ok(data) = send_data {
             loop {
-                let msg_serialized = serde_cbor::to_vec(&data).unwrap();
+                let msg_serialized = serde_cbor::to_vec(&data).expect("Failed to serialize message for client...");
                 let msg_length = msg_serialized.len() as u32;
 
                 let write_res = stream.try_write(&msg_length.to_le_bytes());
@@ -114,7 +114,7 @@ async fn handle_client(
                     eprintln!("Error with {}: {result}", stream.peer_addr().unwrap());
                     break;
                 }
-                stream.try_write(&msg_serialized).unwrap();
+                stream.try_write(&msg_serialized).expect("Failed to send message to client...");
                 break;
             }
         }

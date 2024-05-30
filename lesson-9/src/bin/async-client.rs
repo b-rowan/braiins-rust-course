@@ -28,20 +28,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let local_path = env::current_dir().unwrap();
     let files_path = local_path.join("files");
     let images_path = files_path.join("images");
-    create_dir_all(images_path.clone()).unwrap();
+    create_dir_all(images_path.clone()).expect("Failed to create directories to store files...");
 
     let stream = TcpStream::connect(format!("{}:{}", args.address, args.port)).await?;
     let (tx, mut rx) = mpsc::channel::<Message>(2048);
 
     tokio::spawn(async move {
         loop {
-            let input = read_input().await.unwrap();
+            let input = read_input().await.expect("Failed to read input...");
             let message = Message::from(input);
 
             match message {
                 Message::Stop => exit(0),
                 m => {
-                    tx.send(m).await.unwrap();
+                    tx.send(m).await.expect("Failed to send message to server...");
                 }
             }
         }
@@ -64,15 +64,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
 
             let msg_length = u32::from_le_bytes(msg_length_raw);
-            let mut msg_raw = vec![0u8; usize::try_from(msg_length).unwrap()];
-            stream.try_read(&mut msg_raw).unwrap();
+            let mut msg_raw = vec![0u8; usize::try_from(msg_length).expect("Failed to parse message length from server...")];
+            stream.try_read(&mut msg_raw).expect("Failed to read message from server...");
 
-            let message_result = serde_cbor::from_slice(&msg_raw);
-
-            if message_result.is_err() {
-                eprintln!("Server disconnected.  Closing.");
-                exit(0);
-            }
+            let message_result = serde_cbor::from_slice(&msg_raw).expect("Server disconnected...");
 
             let message = message_result.unwrap();
 
@@ -81,14 +76,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     println!("Receiving file: {name}...");
                     tokio::fs::write(files_path.clone().join(name), data)
                         .await
-                        .unwrap();
+                        .expect("Failed to write received file...");
                 }
                 Message::Photo { data } => {
                     println!("Receiving photo...");
                     let timestamp = Utc::now();
                     tokio::fs::write(images_path.clone().join(format!("{}.png", timestamp.timestamp())), data)
                         .await
-                        .unwrap();
+                        .expect("Failed to write received photo...");
                 }
                 Message::Text(msg) => {
                     println!("{msg}")
@@ -100,7 +95,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let send_data = rx.try_recv();
         if let Ok(data) = send_data {
             loop {
-                let msg_serialized = serde_cbor::to_vec(&data).unwrap();
+                let msg_serialized = serde_cbor::to_vec(&data).expect("Failed to serialize message for server...");
                 let msg_length = msg_serialized.len() as u32;
 
                 let write_res = stream.try_write(&msg_length.to_le_bytes());
@@ -111,7 +106,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     }
                     return Err(result.into());
                 }
-                stream.try_write(&msg_serialized).unwrap();
+                stream.try_write(&msg_serialized).expect("Failed to send message to server...");
                 break;
             }
         }

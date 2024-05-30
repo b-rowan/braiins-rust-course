@@ -6,7 +6,7 @@
 There are 3 parts to this project.  Click on each link to learn more about using each.
 - [Server](./server/README.md)
 - [Client](./client/README.md)
-- [Library](./server/README.md)
+- [Library](./rust_chat/README.md)
 
 ## Dependencies
 This project uses a number of dependencies to make development easier.

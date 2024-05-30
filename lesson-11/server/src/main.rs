@@ -15,7 +15,7 @@ use tracing::{event, Level};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{Layer, Registry};
 
-use lesson_11::Message;
+use rust_chat::Message;
 
 #[derive(Parser, Debug)]
 struct Args {

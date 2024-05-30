@@ -1,14 +1,19 @@
 use std::collections::HashMap;
 use std::error::Error;
-use std::io;
+use std::fs::File;
 use std::sync::Arc;
 use std::time::Duration;
+use std::{env, io};
 
 use clap::Parser;
 use parking_lot::FairMutex;
 use tokio::io::{AsyncReadExt, Interest};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc::{self, UnboundedSender};
+use tracing::level_filters::LevelFilter;
+use tracing::{event, Level};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::{Layer, Registry};
 
 use lesson_11::Message;
 
@@ -18,17 +23,48 @@ struct Args {
     address: String,
     #[arg(short, long, default_value_t = 11111)]
     port: u16,
+    #[arg(long, default_value = "info")]
+    loglevel: LevelFilter,
+    #[arg(long, default_value_t = String::from("server.log"))]
+    logfile: String,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
+    let local_path = env::current_dir().unwrap();
 
+    // initialize logging
+    let log_subscriber = Registry::default().with({
+        let file =
+            File::create(local_path.join(args.logfile)).expect("Failed to create logfile...");
+        tracing_subscriber::fmt::layer()
+            .with_writer(file)
+            .with_filter(args.loglevel)
+    });
+    tracing::subscriber::set_global_default(log_subscriber)
+        .expect("Unable to set global subscriber...");
+
+    event!(
+        Level::INFO,
+        "Starting server on {}:{}",
+        args.address,
+        args.port
+    );
     let server = TcpListener::bind(format!("{}:{}", args.address, args.port)).await?;
+    println!("Server serving on {}:{}", args.address, args.port);
+    event!(
+        Level::INFO,
+        "Server serving on {}:{}",
+        args.address,
+        args.port
+    );
+
     let clients = Arc::new(FairMutex::new(HashMap::new()));
     loop {
         let (socket, addr) = server.accept().await?;
         println!("Accepted client: {addr}");
+        event!(Level::INFO, "Accepted client: {addr}");
         tokio::spawn(handle_client(socket, clients.clone()));
     }
 }
@@ -39,7 +75,9 @@ async fn handle_client(
 ) {
     let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
     {
-        clients.lock().insert(stream.peer_addr().unwrap().to_string(), tx);
+        clients
+            .lock()
+            .insert(stream.peer_addr().unwrap().to_string(), tx);
     }
     loop {
         let ready = stream
@@ -47,6 +85,8 @@ async fn handle_client(
             .await
             .expect("Failed to initialized read/write checks...");
 
+
+        // check if stream is ready to be read from, non-blocking
         if ready.is_readable() {
             let mut msg_length_raw = [0u8; 4];
             let read_result = stream.try_read(&mut msg_length_raw);
@@ -55,7 +95,7 @@ async fn handle_client(
                 if result.kind() == io::ErrorKind::WouldBlock {
                     continue;
                 }
-                eprintln!("Error with {}: {result}", stream.peer_addr().unwrap());
+                event!(Level::WARN, "Error with {}: {result}", stream.peer_addr().unwrap());
                 continue;
             }
 
@@ -75,27 +115,30 @@ async fn handle_client(
             let message: Message = match message_result {
                 Ok(msg) => msg,
                 Err(_) => {
-                    eprintln!(
+                    event!(
+                        Level::INFO,
                         "Client {} closed the connection",
                         stream.peer_addr().unwrap()
                     );
-                    clients.lock().remove(&stream.peer_addr().unwrap().to_string());
+                    clients
+                        .lock()
+                        .remove(&stream.peer_addr().unwrap().to_string());
                     return;
                 }
             };
 
             match &message {
                 Message::File { name, .. } => {
-                    println!(
+                    event!(Level::INFO,
                         "Receiving file from {}: {name}",
                         stream.peer_addr().unwrap()
                     );
                 }
                 Message::Photo { .. } => {
-                    println!("Receiving photo from {}", stream.peer_addr().unwrap());
+                    event!(Level::INFO, "Receiving photo from {}", stream.peer_addr().unwrap());
                 }
                 Message::Text(text) => {
-                    println!("Got client message: {text}");
+                    event!(Level::INFO, "Got client message: {text}");
                 }
                 _ => {}
             }
@@ -122,7 +165,7 @@ async fn handle_client(
                     if result.kind() == io::ErrorKind::WouldBlock {
                         continue;
                     }
-                    eprintln!("Error with {}: {result}", stream.peer_addr().unwrap());
+                    event!(Level::WARN, "Error with {}: {result}", stream.peer_addr().unwrap());
                     break;
                 }
                 stream

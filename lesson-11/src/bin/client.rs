@@ -10,9 +10,9 @@ use clap::Parser;
 use tokio::io::Interest;
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
-use tracing::{event, span, Level};
-use tracing_subscriber::{prelude::*, Registry};
+use tracing::{event, Level};
 use tracing_subscriber::filter::LevelFilter;
+use tracing_subscriber::{prelude::*, Registry};
 
 use lesson_11::Message;
 
@@ -24,6 +24,8 @@ struct Args {
     port: u16,
     #[arg(long, default_value = "info")]
     loglevel: LevelFilter,
+    #[arg(long, default_value_t = String::from("client.log"))]
+    logfile: String,
 }
 
 #[tokio::main]
@@ -31,20 +33,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     let local_path = env::current_dir().unwrap();
 
+    // initialize logging
     let log_subscriber = Registry::default().with({
         let file =
-            File::create(local_path.join("client.log")).expect("Failed to create logfile...");
-        tracing_subscriber::fmt::layer().with_writer(file).with_filter(args.loglevel)
+            File::create(local_path.join(args.logfile)).expect("Failed to create logfile...");
+        tracing_subscriber::fmt::layer()
+            .with_writer(file)
+            .with_filter(args.loglevel)
     });
     tracing::subscriber::set_global_default(log_subscriber)
         .expect("Unable to set global subscriber...");
 
-    let local_path = env::current_dir().unwrap();
     let files_path = local_path.join("files");
     let images_path = files_path.join("images");
 
     event!(Level::INFO, "Creating file storage directories...");
-    // want to panic here if we cant create the directories, these are required
+    // want to panic here if we can't create the directories, these are required
     create_dir_all(images_path.clone()).expect("Failed to create directories to store files...");
     event!(Level::INFO, "Directories created...");
 

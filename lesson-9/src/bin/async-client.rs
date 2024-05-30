@@ -67,7 +67,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let mut msg_raw = vec![0u8; usize::try_from(msg_length).expect("Failed to parse message length from server...")];
             stream.try_read(&mut msg_raw).expect("Failed to read message from server...");
 
-            let message_result = serde_cbor::from_slice(&msg_raw).expect("Server disconnected...");
+            let message_result = serde_cbor::from_slice(&msg_raw);
+
+            if message_result.is_err() {
+                eprintln!("Server disconnected.  Closing.");
+                exit(0);
+            }
 
             let message = message_result.unwrap();
 

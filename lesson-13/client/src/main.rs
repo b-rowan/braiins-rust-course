@@ -52,15 +52,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
     create_dir_all(images_path.clone()).expect("Failed to create directories to store files...");
     event!(Level::INFO, "Directories created...");
 
+    let bind_addr = format!("{}:{}", args.address, args.port);
+
     event!(
         Level::INFO,
-        "Connecting to server on {}:{}",
+        "Connecting to server on {bind_addr}",
         args.address,
         args.port
     );
 
     // create stream and synchronization channel
-    let stream = TcpStream::connect(format!("{}:{}", args.address, args.port)).await?;
+    let stream = TcpStream::connect(bind_addr).await?;
     let (tx, mut rx) = mpsc::channel::<Message>(2048);
 
     // handle user input
@@ -182,6 +184,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
         tokio::time::sleep(Duration::from_millis(1)).await;
     }
+}
+
+async fn handler() {
+
 }
 
 async fn read_input() -> Result<String, Box<dyn Error>> {

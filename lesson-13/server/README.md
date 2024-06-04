@@ -1,4 +1,4 @@
-# Lesson 11 - Server
+# Lesson 13 - Server
 #### A simple rust chat app
 
 ## Usage

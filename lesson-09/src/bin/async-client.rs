@@ -11,7 +11,7 @@ use tokio::io::Interest;
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 
-use lesson_9::Message;
+use lesson_09::Message;
 
 #[derive(Parser, Debug)]
 struct Args {

@@ -21,16 +21,18 @@ pub(crate) fn output_thread(receiver: Receiver<String>) {
         let received =  receiver.recv().unwrap();
 
         let mut parts = received.splitn(2, ' ');
-        if let Some(fmt) = parts.next() {
-            if let Some(data) = parts.next() {
+        match (parts.next(), parts.next()) {
+            (Some(fmt), Some(data)) => {
                 let mut input = String::from(data);
                 let result = format::format(fmt, &mut input);
                 handle_result(result);
-            } else {
+            },
+            (None, _) => {
+                handle_err(NoFormatPassed.into())
+            },
+            _ => {
                 handle_err(InvalidInput.into())
             }
-        } else {
-            handle_err(NoFormatPassed.into())
         }
     }
 }

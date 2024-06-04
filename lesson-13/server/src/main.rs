@@ -44,7 +44,6 @@ pub enum ServerError {
     MessageSendFailed(String),
     #[error("Failed to serialize message.")]
     MessageSerializeFailed,
-
 }
 
 #[tokio::main]
@@ -66,7 +65,7 @@ async fn main() -> Result<(), ServerError> {
     let bind_addr = format!("{}:{}", args.address, args.port);
 
     event!(Level::INFO, "Starting server on {bind_addr}",);
-    let server = TcpListener::bind(bind_addr)
+    let server = TcpListener::bind(bind_addr.clone())
         .await
         .expect(&format!("Server failed to bind to {bind_addr}"));
     println!("Server serving on {bind_addr}");
@@ -89,29 +88,35 @@ async fn handle_client(
     stream: TcpStream,
     clients: Arc<FairMutex<HashMap<String, UnboundedSender<Message>>>>,
 ) {
-    if let Err(e) = _handle_client(stream, clients).await {
-        let level = match e {
-            ServerError::ConnectionClosed(_) => Level::INFO,
-            _ => Level::ERROR,
+    let peer_addr = if let Ok(addr) = stream.peer_addr() {
+        addr.to_string()
+    } else {
+        event!(Level::ERROR, "Could not get peer address when setting up client handler.");
+        return;
+    };
+
+    if let Err(e) = _handle_client(stream, &clients).await {
+        match e {
+            ServerError::ConnectionClosed(_) => event!(Level::INFO, "{e}"),
+            _ => event!(Level::INFO, "{e}"),
         };
-        event!(level, "{e}");
         println!("{e}");
     }
     clients
         .lock()
-        .remove(&stream.peer_addr().unwrap().to_string());
+        .remove(&peer_addr);
 }
 
 async fn _handle_client(
     mut stream: TcpStream,
-    clients: Arc<FairMutex<HashMap<String, UnboundedSender<Message>>>>,
+    clients: &Arc<FairMutex<HashMap<String, UnboundedSender<Message>>>>,
 ) -> Result<(), ServerError> {
     let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
     let peer_address = stream
         .peer_addr()
         .map_err(|_| ServerError::PeerAddressUnknown)?
         .to_string();
-    clients.lock().insert(peer_address, tx);
+    clients.lock().insert(peer_address.clone(), tx);
 
     loop {
         let ready = stream
@@ -138,7 +143,7 @@ async fn _handle_client(
             } else {
                 event!(
                     Level::WARN,
-                    "Failed to convert message length for {peer_address}: {e}"
+                    "Failed to convert message length for {peer_address}."
                 );
                 continue;
             };
@@ -153,21 +158,13 @@ async fn _handle_client(
 
             match &message {
                 Message::File { name, .. } => {
-                    event!(
-                        Level::INFO,
-                        "Receiving file from {}: {name}",
-                        stream.peer_addr().unwrap()
-                    );
+                    event!(Level::INFO, "Receiving file from {peer_address}: {name}",)
                 }
                 Message::Photo { .. } => {
-                    event!(
-                        Level::INFO,
-                        "Receiving photo from {}",
-                        stream.peer_addr().unwrap()
-                    );
+                    event!(Level::INFO, "Receiving photo from {peer_address}",)
                 }
                 Message::Text(text) => {
-                    event!(Level::INFO, "Got client message: {text}");
+                    event!(Level::INFO, "Got message from {peer_address}: {text}")
                 }
                 _ => {}
             }
@@ -175,7 +172,8 @@ async fn _handle_client(
             {
                 let client_handle = clients.lock();
                 for c in client_handle.values() {
-                    c.send(message.clone()).map_err(|| {ServerError::MessageSendFailed(peer_address.clone())})?;
+                    c.send(message.clone())
+                        .map_err(|_| ServerError::MessageSendFailed(peer_address.clone()))?;
                 }
             }
         }
@@ -184,11 +182,10 @@ async fn _handle_client(
         if let Ok(data) = send_data {
             loop {
                 let msg_serialized =
-                    serde_cbor::to_vec(&data).map_err(|_| {ServerError::MessageSerializeFailed})?;
+                    serde_cbor::to_vec(&data).map_err(|_| ServerError::MessageSerializeFailed)?;
                 let msg_length = msg_serialized.len() as u32;
 
                 let write_res = stream.try_write(&msg_length.to_le_bytes());
-
 
                 if let Err(e) = write_res {
                     if e.kind() == io::ErrorKind::WouldBlock {
@@ -198,7 +195,8 @@ async fn _handle_client(
                     break;
                 }
                 stream
-                    .try_write(&msg_serialized).map_err(|_| {ServerError::MessageSendFailed(peer_address.clone())})?;
+                    .try_write(&msg_serialized)
+                    .map_err(|_| ServerError::MessageSendFailed(peer_address.clone()))?;
                 break;
             }
         }

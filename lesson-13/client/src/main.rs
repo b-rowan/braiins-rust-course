@@ -70,7 +70,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let input = read_input().await.expect("Failed to read input...");
             event!(Level::INFO, "Got input: \"{input}\"");
 
-            let message = Message::from(input);
+            let message = Message::try_from(input).unwrap();
 
             match message {
                 Message::Stop => {

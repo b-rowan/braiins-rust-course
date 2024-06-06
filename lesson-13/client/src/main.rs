@@ -4,10 +4,10 @@ use std::fs::{create_dir_all, File};
 use std::process::exit;
 use std::time::Duration;
 
-use async_std::io;
 use chrono::Utc;
 use clap::Parser;
-use tokio::io::Interest;
+use tokio::io;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tracing::{event, Level};
@@ -57,8 +57,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     event!(
         Level::INFO,
         "Connecting to server on {bind_addr}",
-        args.address,
-        args.port
     );
 
     // create stream and synchronization channel
@@ -93,7 +91,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     loop {
         // set which types of stream events the client is interested in
         let ready = stream
-            .ready(Interest::READABLE | Interest::WRITABLE)
+            .ready(io::Interest::READABLE | io::Interest::WRITABLE)
             .await?;
 
         // check if stream is ready to be read, non-blocking
@@ -186,12 +184,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
-async fn handler() {
-
-}
-
 async fn read_input() -> Result<String, Box<dyn Error>> {
     let mut user_input = String::new();
-    io::stdin().read_line(&mut user_input).await?;
+    BufReader::new(io::stdin()).read_line(&mut user_input).await?;
     Ok(user_input.trim().to_string())
 }

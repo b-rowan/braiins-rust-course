@@ -13,7 +13,7 @@ use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{Layer, Registry};
 use tracing_subscriber::layer::SubscriberExt;
 
-use rust_chat::Message;
+use rust_chat::{Message, UserMessage};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -68,7 +68,7 @@ async fn main() -> Result<(), ServerError> {
         .expect(&format!("Server failed to bind to {bind_addr}"));
     event!(Level::INFO, "Server serving on {bind_addr}");
 
-    let (broadcast, _broadcast_recv) = channel::<(String, Message)>(64);
+    let (broadcast, _broadcast_recv) = channel::<(String, UserMessage)>(64);
     loop {
         if let Ok((socket, addr)) = server.accept().await {
             event!(Level::INFO, "Accepted client: {addr}");
@@ -81,11 +81,13 @@ async fn main() -> Result<(), ServerError> {
 
 async fn handle_client(
     stream: TcpStream,
-    broadcast: Sender<(String, Message)>,
+    broadcast: Sender<(String, UserMessage)>,
 ) {
     let (stream_recv, stream_write) = stream.into_split();
+
     let client_send = handle_client_send(stream_write, broadcast.subscribe());
     let client_recv = handle_client_recv(stream_recv, broadcast.clone());
+
 
     // if any of these return, they should both be stopped
     let result = select! {
@@ -105,7 +107,7 @@ async fn handle_client(
     }
 }
 
-async fn handle_client_send(writer: OwnedWriteHalf, mut broadcast: Receiver<(String, Message)>) -> Result<(), ServerError> {
+async fn handle_client_send(writer: OwnedWriteHalf, mut broadcast: Receiver<(String, UserMessage)>) -> Result<(), ServerError> {
     let peer_address = writer
         .peer_addr()
         .map_err(|_| ServerError::PeerAddressUnknown)?
@@ -145,7 +147,7 @@ async fn handle_client_send(writer: OwnedWriteHalf, mut broadcast: Receiver<(Str
     }
 }
 
-async fn handle_client_recv(mut reader: OwnedReadHalf, broadcast: Sender<(String, Message)>) -> Result<(), ServerError> {
+async fn handle_client_recv(mut reader: OwnedReadHalf, broadcast: Sender<(String, UserMessage)>) -> Result<(), ServerError> {
     let peer_address = reader
         .peer_addr()
         .map_err(|_| ServerError::PeerAddressUnknown)?
@@ -173,10 +175,10 @@ async fn handle_client_recv(mut reader: OwnedReadHalf, broadcast: Sender<(String
             .await
             .map_err(|_| ServerError::ReadFailed(peer_address.clone()))?;
 
-        let message = serde_cbor::from_slice(&msg_raw)
+        let msg = serde_cbor::from_slice::<UserMessage>(&msg_raw)
             .map_err(|_| ServerError::ConnectionClosed(peer_address.clone()))?;
 
-        match &message {
+        match &msg.message {
             Message::File { name, .. } => {
                 event!(Level::INFO, "Receiving file from {peer_address}: {name}",)
             }
@@ -188,6 +190,6 @@ async fn handle_client_recv(mut reader: OwnedReadHalf, broadcast: Sender<(String
             }
             _ => {}
         };
-        broadcast.send((peer_address.clone(), message.clone())).map_err(|_| ServerError::MessageSendFailed(peer_address.clone()))?;
+        broadcast.send((peer_address.clone(), msg.clone())).map_err(|_| ServerError::MessageSendFailed(peer_address.clone()))?;
     }
 }

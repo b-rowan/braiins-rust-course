@@ -7,14 +7,14 @@ use std::time::Duration;
 use chrono::Utc;
 use clap::Parser;
 use tokio::io;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tracing::{event, Level};
 use tracing_subscriber::{prelude::*, Registry};
 use tracing_subscriber::filter::LevelFilter;
 
-use rust_chat::Message;
+use rust_chat::{Message, UserMessage};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -54,6 +54,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let bind_addr = format!("{}:{}", args.address, args.port);
 
+    println!("Connecting to chat channel...");
     event!(
         Level::INFO,
         "Connecting to server on {bind_addr}",
@@ -61,8 +62,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // create stream and synchronization channel
     let stream = TcpStream::connect(bind_addr).await?;
-    let (tx, mut rx) = mpsc::channel::<Message>(2048);
+    let (tx, mut rx) = mpsc::channel::<UserMessage>(2048);
 
+    println!("Please enter a username (leave blank for anon mode): ");
+    let input = read_input().await.expect("Failed to read input...");
+    let mut user_name = if input.trim().is_empty() {
+        println!("Connected to chat anonymously (spooky)");
+        None
+    } else {
+        println!("Connected to chat with username: {input}");
+        Some(input)
+    };
     // handle user input
     tokio::spawn(async move {
         loop {
@@ -73,13 +83,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let message = Message::try_from(input).unwrap();
 
             match message {
+                Message::SetUser { username} => {
+                    user_name = username
+                }
                 Message::Stop => {
                     event!(Level::INFO, "Received stop message, stopping...");
                     exit(0);
                 }
                 m => {
                     // unrecoverable
-                    tx.send(m)
+                    tx.send(UserMessage{message: m, username: user_name.clone()})
                         .await
                         .expect("Failed to send message to server...");
                 }
@@ -119,26 +132,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .try_read(&mut msg_raw)
                 .expect("Failed to read message from server...");
 
-            let message_result = serde_cbor::from_slice(&msg_raw);
+            let message_result = serde_cbor::from_slice::<UserMessage>(&msg_raw);
 
             if message_result.is_err() {
                 event!(Level::INFO, "Server disconnected...");
                 exit(0);
             }
 
-            let message = message_result.unwrap();
+            let msg = message_result.unwrap();
+            let message = msg.message;
+            let username = msg.username.unwrap_or(String::from("Anonymous"));
 
             match message {
                 Message::File { name, data } => {
-                    println!("Receiving file: {name}...");
+                    println!("Receiving file from \"{username}\": {name}...");
                     event!(Level::INFO, "Receiving file: {name}...");
                     tokio::fs::write(files_path.clone().join(name), data)
                         .await
                         .expect("Failed to write received file...");
                 }
                 Message::Photo { data } => {
-                    println!("Receiving photo...");
-                    event!(Level::INFO, "Receiving photo...");
+                    println!("Receiving photo from \"{username}\"...");
+                    event!(Level::INFO, "Receiving photo from \"{username}\"...");
                     let timestamp = Utc::now();
                     tokio::fs::write(
                         images_path
@@ -150,8 +165,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     .expect("Failed to write received photo...");
                 }
                 Message::Text(msg) => {
-                    println!("{msg}");
-                    event!(Level::INFO, "Received message: \"{msg}\"");
+                    println!("\"{username}\": {msg}");
+                    event!(Level::INFO, "Received message from \"{username}\": \"{msg}\"");
                 }
                 _ => {}
             }

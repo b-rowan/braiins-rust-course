@@ -8,10 +8,17 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct UserMessage {
+    pub username: Option<String>,
+    pub message: Message
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Message {
     File { name: String, data: String },
     Photo { data: Vec<u8> },
     Text(String),
+    SetUser { username: Option<String> },
     Stop,
 }
 
@@ -57,6 +64,10 @@ impl TryFrom<String> for Message {
                         return Ok(Message::Photo { data: buf });
                     };
                     Ok(Message::Text(value))
+                }
+                ".user" => {
+                    let name = split_data[1];
+                    Ok(Message::SetUser { username: Some(name.to_string()) })
                 }
                 _ => Ok(Message::Text(value)),
             };

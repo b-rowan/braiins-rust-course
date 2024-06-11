@@ -54,6 +54,7 @@ async fn main() -> Result<(), ServerError> {
             File::create(local_path.join(args.logfile)).expect("Failed to create logfile...");
         tracing_subscriber::fmt::layer()
             .with_writer(file)
+            .with_writer(io::stdout)
             .with_filter(args.loglevel)
     });
     tracing::subscriber::set_global_default(log_subscriber)
@@ -65,17 +66,14 @@ async fn main() -> Result<(), ServerError> {
     let server = TcpListener::bind(bind_addr.clone())
         .await
         .expect(&format!("Server failed to bind to {bind_addr}"));
-    println!("Server serving on {bind_addr}");
     event!(Level::INFO, "Server serving on {bind_addr}");
 
     let (broadcast, _broadcast_recv) = channel::<(String, Message)>(64);
     loop {
         if let Ok((socket, addr)) = server.accept().await {
-            println!("Accepted client: {addr}");
             event!(Level::INFO, "Accepted client: {addr}");
             tokio::spawn(handle_client(socket, broadcast.clone()));
         } else {
-            println!("Unknown error while accepting new clients.");
             event!(Level::ERROR, "Unknown error while accepting new clients.");
         }
     }
@@ -104,7 +102,6 @@ async fn handle_client(
         } else {
             event!(Level::ERROR, "{e}")
         }
-        println!("{e}");
     }
 }
 

@@ -1,10 +1,11 @@
-use image::io::Reader as ImageReader;
-use image::{DynamicImage, ImageFormat};
 use std::{fs, io};
 use std::io::Cursor;
 use std::path::Path;
-use thiserror::Error;
+
+use image::{DynamicImage, ImageFormat};
+use image::io::Reader as ImageReader;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Message {

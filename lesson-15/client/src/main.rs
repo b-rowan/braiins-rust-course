@@ -11,8 +11,8 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tracing::{event, Level};
-use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::{prelude::*, Registry};
+use tracing_subscriber::filter::LevelFilter;
 
 use rust_chat::Message;
 

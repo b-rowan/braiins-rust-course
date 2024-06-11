@@ -91,7 +91,10 @@ async fn handle_client(
     let peer_addr = if let Ok(addr) = stream.peer_addr() {
         addr.to_string()
     } else {
-        event!(Level::ERROR, "Could not get peer address when setting up client handler.");
+        event!(
+            Level::ERROR,
+            "Could not get peer address when setting up client handler."
+        );
         return;
     };
 
@@ -102,9 +105,7 @@ async fn handle_client(
         };
         println!("{e}");
     }
-    clients
-        .lock()
-        .remove(&peer_addr);
+    clients.lock().remove(&peer_addr);
 }
 
 async fn _handle_client(

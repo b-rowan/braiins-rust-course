@@ -165,7 +165,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     .expect("Failed to write received photo...");
                 }
                 Message::Text(msg) => {
-                    println!("\"{username}\": {msg}");
+                    println!("[{username}]: {msg}");
                     event!(Level::INFO, "Received message from \"{username}\": \"{msg}\"");
                 }
                 _ => {}

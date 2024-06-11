@@ -1,17 +1,19 @@
-use std::{env, io};
 use std::fs::File;
+use std::{env, io};
+use std::sync::Arc;
 
 use clap::Parser;
+use sqlx::{migrate::MigrateDatabase, Pool, Sqlite, SqlitePool, Row};
 use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::net::{TcpListener, TcpStream};
 use tokio::select;
 use tokio::sync::broadcast::{channel, Receiver, Sender};
-use tracing::{event, Level};
 use tracing::level_filters::LevelFilter;
-use tracing_subscriber::{Layer, Registry};
+use tracing::{event, Level};
 use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::{Layer, Registry};
 
 use rust_chat::{Message, UserMessage};
 
@@ -25,6 +27,8 @@ struct Args {
     loglevel: LevelFilter,
     #[arg(long, default_value_t = String::from("server.log"))]
     logfile: String,
+    #[arg(long, default_value_t = String::from("sqlite.db"))]
+    db_path: String,
 }
 
 #[derive(Error, Debug)]
@@ -41,6 +45,8 @@ pub enum ServerError {
     MessageSendFailed(String),
     #[error("Failed to serialize message.")]
     MessageSerializeFailed,
+    #[error("Failed to write to DB.")]
+    DBWriteFailed,
 }
 
 #[tokio::main]
@@ -68,26 +74,50 @@ async fn main() -> Result<(), ServerError> {
         .expect(&format!("Server failed to bind to {bind_addr}"));
     event!(Level::INFO, "Server serving on {bind_addr}");
 
+    if !Sqlite::database_exists(&args.db_path)
+        .await
+        .unwrap_or(false)
+    {
+        event!(Level::INFO, "Creating message database: {}", &args.db_path);
+        Sqlite::create_database(&args.db_path)
+            .await
+            .expect("Unable to create message database.");
+    } else {
+        event!(Level::INFO, "Message database exists: {}", &args.db_path);
+    }
+    let db = Arc::new(SqlitePool::connect(&args.db_path).await.unwrap());
+    sqlx::query("CREATE TABLE IF NOT EXISTS messages \
+    (\
+        id INTEGER PRIMARY KEY NOT NULL, \
+        username VARCHAR(250), \
+        message VARCHAR(250) NOT NULL\
+    );").execute(&*db).await.expect("Failed to set up database.");
+
+    // check DB values
+    // let result = sqlx::query("SELECT id, username, message FROM messages")
+    // .fetch_all(&*db)
+    // .await
+    // .unwrap();
+    // for (idx, row) in result.iter().enumerate() {
+    //     println!("[{}]: {}", row.get::<String, &str>("username"), row.get::<String, &str>("message"));
+    // }
+
     let (broadcast, _broadcast_recv) = channel::<(String, UserMessage)>(64);
     loop {
         if let Ok((socket, addr)) = server.accept().await {
             event!(Level::INFO, "Accepted client: {addr}");
-            tokio::spawn(handle_client(socket, broadcast.clone()));
+            tokio::spawn(handle_client(socket, broadcast.clone(), db.clone()));
         } else {
             event!(Level::ERROR, "Unknown error while accepting new clients.");
         }
     }
 }
 
-async fn handle_client(
-    stream: TcpStream,
-    broadcast: Sender<(String, UserMessage)>,
-) {
+async fn handle_client(stream: TcpStream, broadcast: Sender<(String, UserMessage)>, db: Arc<Pool<Sqlite>>) {
     let (stream_recv, stream_write) = stream.into_split();
 
     let client_send = handle_client_send(stream_write, broadcast.subscribe());
-    let client_recv = handle_client_recv(stream_recv, broadcast.clone());
-
+    let client_recv = handle_client_recv(stream_recv, broadcast.clone(), db);
 
     // if any of these return, they should both be stopped
     let result = select! {
@@ -107,7 +137,10 @@ async fn handle_client(
     }
 }
 
-async fn handle_client_send(writer: OwnedWriteHalf, mut broadcast: Receiver<(String, UserMessage)>) -> Result<(), ServerError> {
+async fn handle_client_send(
+    writer: OwnedWriteHalf,
+    mut broadcast: Receiver<(String, UserMessage)>,
+) -> Result<(), ServerError> {
     let peer_address = writer
         .peer_addr()
         .map_err(|_| ServerError::PeerAddressUnknown)?
@@ -121,8 +154,8 @@ async fn handle_client_send(writer: OwnedWriteHalf, mut broadcast: Receiver<(Str
                     continue;
                 }
                 loop {
-                    let msg_serialized =
-                        serde_cbor::to_vec(&message).map_err(|_| ServerError::MessageSerializeFailed)?;
+                    let msg_serialized = serde_cbor::to_vec(&message)
+                        .map_err(|_| ServerError::MessageSerializeFailed)?;
                     let msg_length = msg_serialized.len() as u32;
 
                     let write_res = writer.try_write(&msg_length.to_le_bytes());
@@ -147,7 +180,11 @@ async fn handle_client_send(writer: OwnedWriteHalf, mut broadcast: Receiver<(Str
     }
 }
 
-async fn handle_client_recv(mut reader: OwnedReadHalf, broadcast: Sender<(String, UserMessage)>) -> Result<(), ServerError> {
+async fn handle_client_recv(
+    mut reader: OwnedReadHalf,
+    broadcast: Sender<(String, UserMessage)>,
+    db: Arc<Pool<Sqlite>>
+) -> Result<(), ServerError> {
     let peer_address = reader
         .peer_addr()
         .map_err(|_| ServerError::PeerAddressUnknown)?
@@ -186,10 +223,16 @@ async fn handle_client_recv(mut reader: OwnedReadHalf, broadcast: Sender<(String
                 event!(Level::INFO, "Receiving photo from {peer_address}",)
             }
             Message::Text(text) => {
-                event!(Level::INFO, "Got message from {peer_address}: {text}")
+                event!(Level::INFO, "Got message from {peer_address}: {text}");
+                sqlx::query("INSERT INTO messages (username, message) VALUES ($1, $2)")
+                .bind(&msg.username).bind(text)
+                .execute(&mut *db.acquire().await.unwrap())
+                .await.map_err(|_| {ServerError::DBWriteFailed})?;
             }
             _ => {}
         };
-        broadcast.send((peer_address.clone(), msg.clone())).map_err(|_| ServerError::MessageSendFailed(peer_address.clone()))?;
+        broadcast
+            .send((peer_address.clone(), msg.clone()))
+            .map_err(|_| ServerError::MessageSendFailed(peer_address.clone()))?;
     }
 }

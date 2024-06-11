@@ -5,9 +5,10 @@ use std::path::Path;
 use image::{DynamicImage, ImageFormat};
 use image::io::Reader as ImageReader;
 use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
 use thiserror::Error;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, FromRow)]
 pub struct UserMessage {
     pub username: Option<String>,
     pub message: Message

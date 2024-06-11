@@ -1,4 +1,4 @@
-# Lesson 13 - Client
+# Lesson 15 - Client
 #### A simple rust chat app
 
 ## Usage

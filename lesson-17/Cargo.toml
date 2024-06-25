@@ -1,0 +1,9 @@
+[package]
+name = "lesson-17"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rocket = "0.5.1"
+rocket_ws = "0.1.1"
+tokio = { version = "1.38.0", features = ["full"] }

@@ -1,9 +1,9 @@
-use std::{fs, io};
 use std::io::Cursor;
 use std::path::Path;
+use std::{fs, io};
 
-use image::{DynamicImage, ImageFormat};
 use image::io::Reader as ImageReader;
+use image::{DynamicImage, ImageFormat};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use thiserror::Error;

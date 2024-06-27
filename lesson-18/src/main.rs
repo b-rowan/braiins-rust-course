@@ -28,6 +28,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{Layer, Registry};
 
 mod message;
+
 use crate::message::UserMessage;
 use message::Message;
 

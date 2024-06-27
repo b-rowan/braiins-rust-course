@@ -74,6 +74,8 @@
         window.websocket = new WebSocket(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + "/ws/chat");
         async function uploadFile() {
             let file = document.getElementById("upload-file").files[0];
+            let byteArray = Array.from(new Uint8Array(await file.arrayBuffer()))
+
 
             addSelfFile(file.name);
 
@@ -82,7 +84,7 @@
                 "message": {
                     "File": {
                         "name": file.name,
-                        "data": await file.text()
+                        "data": byteArray
                     }
                 }
             }
